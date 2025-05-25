@@ -174,6 +174,23 @@ impl VisitMut for Tipper {
                                     type_args: None,
                                 })
                             }
+                            Expr::Ident(Ident {
+                                span,
+                                ctxt,
+                                sym,
+                                optional,
+                            }) if sym.as_str() == "eval" => Expr::Call(CallExpr {
+                                span,
+                                ctxt,
+                                callee: Callee::Expr(Box::new(Expr::Ident(Ident {
+                                    span,
+                                    ctxt,
+                                    sym,
+                                    optional,
+                                }))),
+                                args,
+                                type_args: None,
+                            }),
                             mut e => {
                                 e.visit_mut_with(self);
                                 Expr::Call(CallExpr {
