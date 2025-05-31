@@ -3,17 +3,36 @@ use std::mem::take;
 use swc_atoms::Atom;
 use swc_common::Spanned;
 use swc_ecma_ast::{
-    ArrowExpr, AssignExpr, AssignTarget, CallExpr, Callee, Expr, ExprOrSpread, Ident, IdentName,
-    Lit, MemberExpr, SimpleAssignTarget, Str,
+    ArrowExpr, AssignExpr, AssignOp, AssignTarget, Bool, CallExpr, Callee, CondExpr, Expr,
+    ExprOrSpread, Ident, IdentName, Lit, MemberExpr, OptChainExpr, SeqExpr, SimpleAssignTarget,
+    Str,
 };
 use swc_ecma_visit::{VisitMut, VisitMutWith};
-
+#[non_exhaustive]
 pub struct Tipper {
     pub haven: Ident,
+    pub activity: bool,
+}
+impl Tipper {
+    pub fn new(haven: Ident) -> Self {
+        Self {
+            haven,
+            activity: false,
+        }
+    }
 }
 impl VisitMut for Tipper {
-    fn visit_mut_expr(&mut self, e: &mut Expr) {
-        *e = match take(e) {
+    fn visit_mut_expr(&mut self, e2: &mut Expr) {
+        let mut eb = if self.activity {
+            Some({
+                let mut eb = e2.clone();
+                eb.visit_mut_children_with(self);
+                eb
+            })
+        } else {
+            None
+        };
+        let f = match take(e2) {
             Expr::Member(m) => {
                 let mut o = m.obj;
                 o.visit_mut_with(self);
@@ -229,8 +248,58 @@ impl VisitMut for Tipper {
             }
             mut e => {
                 e.visit_mut_children_with(self);
-                e
+                *e2 = e;
+                return;
             }
-        }
+        };
+        *e2 = match eb {
+            Some(eb) => Expr::Cond(CondExpr {
+                span: eb.span(),
+                test: Box::new(Expr::OptChain(OptChainExpr {
+                    span: eb.span(),
+                    optional: true,
+                    base: Box::new(swc_ecma_ast::OptChainBase::Member(MemberExpr {
+                        span: eb.span(),
+                        obj: Box::new(Expr::Ident(self.haven.clone())),
+                        prop: swc_ecma_ast::MemberProp::Ident(IdentName {
+                            span: eb.span(),
+                            sym: Atom::new("active"),
+                        }),
+                    })),
+                })),
+                cons: Box::new(Expr::Seq(SeqExpr {
+                    span: eb.span(),
+                    exprs: vec![
+                        Box::new(Expr::Assign(AssignExpr {
+                            span: eb.span(),
+                            op: AssignOp::Assign,
+                            left: AssignTarget::Simple(SimpleAssignTarget::OptChain(
+                                OptChainExpr {
+                                    span: eb.span(),
+                                    optional: true,
+                                    base: Box::new(swc_ecma_ast::OptChainBase::Member(
+                                        (MemberExpr {
+                                            span: eb.span(),
+                                            obj: Box::new(Expr::Ident(self.haven.clone())),
+                                            prop: swc_ecma_ast::MemberProp::Ident(IdentName {
+                                                span: eb.span(),
+                                                sym: Atom::new("active"),
+                                            }),
+                                        }),
+                                    )),
+                                },
+                            )),
+                            right: Box::new(Expr::Lit(Lit::Bool(Bool {
+                                span: eb.span(),
+                                value: false,
+                            }))),
+                        })),
+                        Box::new(f),
+                    ],
+                })),
+                alt: Box::new(eb),
+            }),
+            None => f,
+        };
     }
 }
