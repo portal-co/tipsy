@@ -1,13 +1,14 @@
 # tipsy
 
 ## Description
-Project tipsy
+"Supports 'impossible' polyfills (proxies, etc)". Utilities for difficult JS polyfills (`portal-es-tipsy`).
 
 ## Goals
-- [ ] Add project goals
+- [ ] Polyfill complex JS features
+- [ ] Support Proxy/Reflect
 
 ## Progress
-- [ ] Initial setup
+- [ ] Crate initialized
 
 ---
 *AI assisted*
